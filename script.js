@@ -1,146 +1,185 @@
-window.requestAnimationFrame =
-    window.__requestAnimationFrame ||
-        window.requestAnimationFrame ||
-        window.webkitRequestAnimationFrame ||
-        window.mozRequestAnimationFrame ||
-        window.oRequestAnimationFrame ||
-        window.msRequestAnimationFrame ||
-        (function () {
-            return function (callback, element) {
-                var lastTime = element.__lastTime;
-                if (lastTime === undefined) {
-                    lastTime = 0;
-                }
-                var currTime = Date.now();
-                var timeToCall = Math.max(1, 33 - (currTime - lastTime));
-                window.setTimeout(callback, timeToCall);
-                element.__lastTime = currTime + timeToCall;
-            };
-        })();
-window.isDevice = (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(((navigator.userAgent || navigator.vendor || window.opera)).toLowerCase()));
-var loaded = false;
-var init = function () {
-    if (loaded) return;
-    loaded = true;
-    var mobile = window.isDevice;
-    var koef = mobile ? 0.5 : 1;
-    var canvas = document.getElementById('heart');
-    var ctx = canvas.getContext('2d');
-    var width = canvas.width = koef * innerWidth;
-    var height = canvas.height = koef * innerHeight;
-    var rand = Math.random;
-    ctx.fillStyle = "rgba(0,0,0,1)";
-    ctx.fillRect(0, 0, width, height);
+import * as THREE from "https://cdn.skypack.dev/three@0.136.0";
+import { OrbitControls } from "https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls";
+import { OBJLoader } from "https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/OBJLoader.js";
+import { FontLoader } from "https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/FontLoader.js";
+import { TextGeometry } from "https://cdn.skypack.dev/three@0.136.0/examples/jsm/geometries/TextGeometry.js";
 
-    var heartPosition = function (rad) {
-        //return [Math.sin(rad), Math.cos(rad)];
-        return [Math.pow(Math.sin(rad), 3), -(15 * Math.cos(rad) - 5 * Math.cos(2 * rad) - 2 * Math.cos(3 * rad) - Math.cos(4 * rad))];
-    };
-    var scaleAndTranslate = function (pos, sx, sy, dx, dy) {
-        return [dx + pos[0] * sx, dy + pos[1] * sy];
-    };
+const container = document.getElementById("universe");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x160016);
 
-    window.addEventListener('resize', function () {
-        width = canvas.width = koef * innerWidth;
-        height = canvas.height = koef * innerHeight;
-        ctx.fillStyle = "rgba(0,0,0,1)";
-        ctx.fillRect(0, 0, width, height);
-    });
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 1, 1000);
+camera.position.set(0, 4, 21);
 
-    var traceCount = mobile ? 20 : 50;
-    var pointsOrigin = [];
-    var i;
-    var dr = mobile ? 0.3 : 0.1;
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 210, 13, 0, 0));
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 150, 9, 0, 0));
-    for (i = 0; i < Math.PI * 2; i += dr) pointsOrigin.push(scaleAndTranslate(heartPosition(i), 90, 5, 0, 0));
-    var heartPointsCount = pointsOrigin.length;
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+container.appendChild(renderer.domElement);
 
-    var targetPoints = [];
-    var pulse = function (kx, ky) {
-        for (i = 0; i < pointsOrigin.length; i++) {
-            targetPoints[i] = [];
-            targetPoints[i][0] = kx * pointsOrigin[i][0] + width / 2;
-            targetPoints[i][1] = ky * pointsOrigin[i][1] + height / 2;
-        }
-    };
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.enablePan = false;
 
-    var e = [];
-    for (i = 0; i < heartPointsCount; i++) {
-        var x = rand() * width;
-        var y = rand() * height;
-        e[i] = {
-            vx: 0,
-            vy: 0,
-            R: 2,
-            speed: rand() + 5,
-            q: ~~(rand() * heartPointsCount),
-            D: 2 * (i % 2) - 1,
-            force: 0.2 * rand() + 0.7,
-            f: "hsla(0," + ~~(40 * rand() + 60) + "%," + ~~(60 * rand() + 20) + "%,.3)",
-            trace: []
-        };
-        for (var k = 0; k < traceCount; k++) e[i].trace[k] = {x: x, y: y};
-    }
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
 
-    var config = {
-        traceK: 0.4,
-        timeDelta: 0.01
-    };
-
-    var time = 0;
-    var loop = function () {
-        var n = -Math.cos(time);
-        pulse((1 + n) * .5, (1 + n) * .5);
-        time += ((Math.sin(time)) < 0 ? 9 : (n > 0.8) ? .2 : 1) * config.timeDelta;
-        ctx.fillStyle = "rgba(0,0,0,.1)";
-        ctx.fillRect(0, 0, width, height);
-        for (i = e.length; i--;) {
-            var u = e[i];
-            var q = targetPoints[u.q];
-            var dx = u.trace[0].x - q[0];
-            var dy = u.trace[0].y - q[1];
-            var length = Math.sqrt(dx * dx + dy * dy);
-            if (10 > length) {
-                if (0.95 < rand()) {
-                    u.q = ~~(rand() * heartPointsCount);
-                }
-                else {
-                    if (0.99 < rand()) {
-                        u.D *= -1;
-                    }
-                    u.q += u.D;
-                    u.q %= heartPointsCount;
-                    if (0 > u.q) {
-                        u.q += heartPointsCount;
-                    }
-                }
-            }
-            u.vx += -dx / length * u.speed;
-            u.vy += -dy / length * u.speed;
-            u.trace[0].x += u.vx;
-            u.trace[0].y += u.vy;
-            u.vx *= u.force;
-            u.vy *= u.force;
-            for (k = 0; k < u.trace.length - 1;) {
-                var T = u.trace[k];
-                var N = u.trace[++k];
-                N.x -= config.traceK * (N.x - T.x);
-                N.y -= config.traceK * (N.y - T.y);
-            }
-            ctx.fillStyle = u.f;
-            for (k = 0; k < u.trace.length; k++) {
-                ctx.fillRect(u.trace[k].x, u.trace[k].y, 1, 1);
-            }
-        }
-        //ctx.fillStyle = "rgba(255,255,255,1)";
-        //for (i = u.trace.length; i--;) ctx.fillRect(targetPoints[i][0], targetPoints[i][1], 2, 2);
-
-        window.requestAnimationFrame(loop, canvas);
-    };
-    loop();
+const uniforms = {
+  time: { value: 0 }
 };
 
-var s = document.readyState;
-if (s === 'complete' || s === 'loaded' || s === 'interactive') init();
-else document.addEventListener('DOMContentLoaded', init, false);
+const spacePointsCount = 20000;
+const spacePositions = [];
+const spaceSizes = [];
+const spaceShifts = [];
+
+function pushShift(arr) {
+  arr.push(
+    Math.random() * Math.PI,
+    Math.random() * Math.PI * 2,
+    (Math.random() * 0.9 + 0.1) * Math.PI * 0.1,
+    Math.random() * 0.9 + 0.1
+  );
+}
+
+for(let i = 0; i < spacePointsCount; i++) {
+  const radius = 12 + Math.random() * 15;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos((Math.random() * 2) - 1);
+  const x = radius * Math.sin(phi) * Math.cos(theta);
+  const y = radius * Math.sin(phi) * Math.sin(theta);
+  const z = radius * Math.cos(phi);
+
+  spacePositions.push(x, y, z);
+  spaceSizes.push(Math.random() * 1.0 + 0.3);
+  pushShift(spaceShifts);
+}
+
+const spaceGeometry = new THREE.BufferGeometry();
+spaceGeometry.setAttribute('position', new THREE.Float32BufferAttribute(spacePositions, 3));
+spaceGeometry.setAttribute('sizes', new THREE.Float32BufferAttribute(spaceSizes, 1));
+spaceGeometry.setAttribute('shift', new THREE.Float32BufferAttribute(spaceShifts, 4));
+
+const spaceMaterial = new THREE.PointsMaterial({
+  size: 0.12,
+  transparent: true,
+  depthTest: false,
+  blending: THREE.AdditiveBlending,
+  onBeforeCompile: shader => {
+    shader.uniforms.time = uniforms.time;
+    shader.vertexShader = `
+      uniform float time;
+      attribute float sizes;
+      attribute vec4 shift;
+      varying vec3 vColor;
+      ${shader.vertexShader}
+    `.replace(
+      `gl_PointSize = size;`,
+      `gl_PointSize = size * sizes;`
+    ).replace(
+      `#include <color_vertex>`,
+      `#include <color_vertex>
+        float d = length(abs(position) / vec3(20., 20., 20));
+        d = clamp(d, 0., 1.);
+        vColor = mix(vec3(150,150,255), vec3(80,50,120), d) / 255.;`
+    ).replace(
+      `#include <begin_vertex>`,
+      `#include <begin_vertex>
+        float t = time;
+        float moveT = mod(shift.x + shift.z * t, 6.283185);
+        float moveS = mod(shift.y + shift.z * t, 6.283185);
+        vec3 offset = vec3(cos(moveS) * sin(moveT), cos(moveT), sin(moveS) * sin(moveT)) * shift.w;
+        transformed += offset;
+      `
+    );
+    shader.fragmentShader = `
+      varying vec3 vColor;
+      ${shader.fragmentShader}
+    `.replace(
+      `#include <clipping_planes_fragment>`,
+      `#include <clipping_planes_fragment>
+        float d = length(gl_PointCoord.xy - 0.5);`
+    ).replace(
+      `vec4 diffuseColor = vec4( diffuse, opacity );`,
+      `vec4 diffuseColor = vec4( vColor, smoothstep(0.5, 0.1, d) );`
+    );
+  }
+});
+
+const spacePoints = new THREE.Points(spaceGeometry, spaceMaterial);
+scene.add(spacePoints);
+
+let heartMesh = null;
+const loader = new OBJLoader();
+loader.load('https://assets.codepen.io/127738/heart_2.obj', obj => {
+  heartMesh = obj.children[0];
+  heartMesh.geometry.rotateX(-Math.PI * 0.5);
+  heartMesh.geometry.scale(0.15, 0.15, 0.15);
+  heartMesh.geometry.translate(0, -0.4, 0);
+  heartMesh.material = new THREE.MeshBasicMaterial({ color: 0xff5555 });
+
+  heartMesh.geometry.attributes.position.originalPosition = heartMesh.geometry.attributes.position.array.slice();
+
+  scene.add(heartMesh);
+});
+
+// Thêm chữ "I love you" 3D phía dưới trái tim
+const fontLoader = new FontLoader();
+fontLoader.load(
+  "https://cdn.jsdelivr.net/npm/three@0.136.0/examples/fonts/helvetiker_regular.typeface.json",
+  (font) => {
+    const textGeometry = new TextGeometry("Yeu em <3", {
+      font: font,
+      size: 0.5,
+      height: 0.1,
+      curveSegments: 12,
+      bevelEnabled: true,
+      bevelThickness: 0.03,
+      bevelSize: 0.02,
+      bevelOffset: 0,
+      bevelSegments: 5
+    });
+
+    const textMaterial = new THREE.MeshBasicMaterial({ color: 0xff5555 });
+    const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+
+    // Căn chỉnh chữ dưới trái tim (vị trí có thể chỉnh thêm nếu muốn)
+    textMesh.position.set(-1.5, -1.5, 0);
+    scene.add(textMesh);
+  }
+);
+
+const clock = new THREE.Clock();
+function applyBeatToHeart(time) {
+  if (!heartMesh) return;
+  const positions = heartMesh.geometry.attributes.position.array;
+  const original = heartMesh.geometry.attributes.position.originalPosition;
+  for (let i = 0; i < positions.length; i += 3) {
+    const scale = 1 + 0.1 * Math.sin(time * 8);
+    positions[i] = original[i] * scale;
+    positions[i + 1] = original[i + 1] * scale;
+    positions[i + 2] = original[i + 2] * scale;
+  }
+  heartMesh.geometry.attributes.position.needsUpdate = true;
+}
+
+function animate() {
+  const elapsed = clock.getElapsedTime();
+  uniforms.time.value = elapsed * Math.PI;
+
+  spacePoints.rotation.y = -elapsed * 0.03;
+  spacePoints.rotation.x = Math.cos(elapsed * 0.3) * 0.02;
+
+  if (heartMesh) {
+    heartMesh.rotation.y = elapsed * 0.08;
+    heartMesh.rotation.x = Math.sin(elapsed * 0.5) * 0.05;
+    applyBeatToHeart(elapsed);
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+
+animate();
